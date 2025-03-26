@@ -62,6 +62,9 @@ def match_token_to_id(token, coins_df):
     return None
 
 
+
+
+
 def generate_pdf(df, active_alloc):
     pdf = FPDF()
     pdf.add_page()
@@ -69,26 +72,38 @@ def generate_pdf(df, active_alloc):
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(0, 10, "Crypto Portfolio Summary", ln=True, align='C')
     pdf.set_font("Arial", '', 12)
-    pdf.cell(0, 10, f"Total Capital Deployed: {active_alloc:.2f}%", ln=True)
+    pdf.cell(0, 10, f"Total Capital Deployed: {active_alloc:.2f}%", ln=True, align='C')
     pdf.ln(5)
 
     pdf.set_font("Arial", 'B', 10)
-    headers = ["Token", "Target Allocation (%)", "Live Price (USD)", "Activated (%)"]
-    col_widths = [40, 50, 40, 45]
+    headers = ["Token", "Live Price (USD)", "Target Allocation (%)", "Activated (%)"]
+    col_widths = [40, 40, 50, 50]
+    x_start = (210 - sum(col_widths)) / 2
+    pdf.set_x(x_start)
     for i, header in enumerate(headers):
         pdf.cell(col_widths[i], 8, header, border=1, align='C')
     pdf.ln()
 
     pdf.set_font("Arial", '', 10)
     for _, row in df.iterrows():
-        values = [str(row[h]) for h in headers]
+        values = [str(row["Token"]), str(row["Live Price (USD)"]),
+                  str(row["Target Allocation (%)"]), str(row["Activated (%)"])]
+        pdf.set_x(x_start)
         for i, val in enumerate(values):
             pdf.cell(col_widths[i], 8, val, border=1, align='C')
         pdf.ln()
 
     chart_path = "pie_chart_temp.png"
-    fig, ax = plt.subplots(figsize=(5.5, 5.5))
-    ax.pie(df['Target Allocation (%)'], labels=df['Token'], autopct='%1.1f%%', startangle=140)
+    fig, ax = plt.subplots(figsize=(6, 6))
+    wedges, texts = ax.pie(df['Target Allocation (%)'], startangle=140)
+
+    legend_labels = [
+        f"{token} ({percent:.1f}%)"
+        for token, percent in zip(df['Token'], df['Target Allocation (%)'])
+    ]
+
+    ax.legend(legend_labels, title="Tokens", loc="center left", bbox_to_anchor=(1, 0.5), fontsize=8)
+    ax.set_title("Target Allocation Pie Chart", fontsize=12)
     plt.tight_layout()
     plt.savefig(chart_path)
     plt.close()
@@ -179,7 +194,7 @@ if uploaded_file:
     st.subheader("📊 Portfolio Summary")
     st.plotly_chart(px.pie(result_df, names='Token', values='Target Allocation (%)', title='Target Allocation'), use_container_width=True)
     st.plotly_chart(px.bar(result_df, x='Token', y=['Target Allocation (%)', 'Activated (%)'], barmode='group', title='Target vs Activated Allocation'), use_container_width=True)
-    st.dataframe(result_df)
+    st.dataframe(result_df[['Token', 'Live Price (USD)', 'Target Allocation (%)', 'Activated (%)']])
 
     if st.button("📄 Generate PDF Report"):
         pdf_file = generate_pdf(result_df, active_alloc)
