@@ -195,41 +195,44 @@ if uploaded_file:
 
 
 
-    # بررسی پوزیشن‌های تازه فعال‌شده
+    
+
+    # بررسی وضعیت قبلی
     state_file = "active_state.json"
     previous_state = {}
-    newly_activated = []
-
     if os.path.exists(state_file):
         with open(state_file, "r") as f:
             previous_state = json.load(f)
 
+    newly_activated = []
+
     for token in tokens:
         current = target_allocations[token] * entry_percent[token]
         previous = previous_state.get(token, 0)
-        if current > 0 and previous == 0:
-            newly_activated.append(f"{token} – {current:.2f}% activated")
 
-    if st.button("✅ ثبت تغییرات دستی"):
-        if newly_activated:
-            with st.expander("🔔 پوزیشن‌های تازه فعال‌شده"):
-                for msg in newly_activated:
-                    st.write(f"- {msg}")
+        st.markdown(f"---\n**{token}**")
+        if st.button(f"Save changes for {token}"):
+            if current > 0 and previous == 0:
+                msg = f"{token} – {current:.2f}% activated"
+                newly_activated.append(msg)
+                st.success(f"✅ {msg}")
 
-            bot_token = os.environ.get("BOT_TOKEN")
-            chat_id = os.environ.get("CHAT_ID")
-            if bot_token and chat_id:
-                for msg in newly_activated:
-                    text = f"🚨 پوزیشن جدید فعال شد:\n{msg}"
+                bot_token = os.environ.get("BOT_TOKEN")
+                chat_id = os.environ.get("CHAT_ID")
+                if bot_token and chat_id:
+                    text = f"🚨 New position activated:\n{msg}"
                     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
                     payload = {"chat_id": chat_id, "text": text}
                     try:
                         requests.post(url, data=payload)
                     except:
-                        st.error("❌ ارسال به تلگرام ناموفق بود")
+                        st.error("❌ Telegram notification failed")
 
-        with open(state_file, "w") as f:
-            json.dump({t: target_allocations[t] * entry_percent[t] for t in tokens}, f)
+            previous_state[token] = current
+            with open(state_file, "w") as f:
+                json.dump(previous_state, f)
+
+
 
     # ساخت جدول نهایی و نمودارها
     result_df = pd.DataFrame({
