@@ -145,7 +145,7 @@ if uploaded_file:
     tokens = list(df['Token'].unique())
     use_custom_alloc = "Target Allocation" in df.columns
     total_alloc = 0
-
+    tokens = list(df['Token'].unique())
     for token in tokens:
         if use_custom_alloc:
             alloc = df[df['Token'] == token]["Target Allocation"].values[0]
