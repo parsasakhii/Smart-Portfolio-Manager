@@ -142,17 +142,19 @@ if uploaded_file:
     df = df[df["Token"].notna()]
 
     target_allocations = {}
-    tokens = list(df['Token'].unique())
     use_custom_alloc = "Target Allocation" in df.columns
     total_alloc = 0
-    tokens = list(df['Token'].unique())
-    for token in tokens:
-        if use_custom_alloc:
-            alloc = df[df['Token'] == token]["Target Allocation"].values[0]
-        else:
-            alloc = round(100 / len(tokens), 2)
-        target_allocations[token] = alloc
-        total_alloc += alloc
+
+    if "Token" in df.columns:
+        tokens = list(df['Token'].unique())
+
+        for token in tokens:
+            if use_custom_alloc:
+                alloc = df[df['Token'] == token]["Target Allocation"].values[0]
+            else:
+                alloc = round(100 / len(tokens), 2)
+            target_allocations[token] = alloc
+            total_alloc += alloc
 
     token_id_map = {}
     unmatched_tokens = []
