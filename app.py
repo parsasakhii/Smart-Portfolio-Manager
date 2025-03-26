@@ -191,11 +191,28 @@ if uploaded_file:
         "Activated (%)": [target_allocations[t] * entry_percent[t] for t in tokens]
     })
 
-    st.subheader("📊 Portfolio Summary")
-    st.plotly_chart(px.pie(result_df, names='Token', values='Target Allocation (%)', title='Target Allocation'), use_container_width=True)
-    st.plotly_chart(px.bar(result_df, x='Token', y=['Target Allocation (%)', 'Activated (%)'], barmode='group', title='Target vs Activated Allocation'), use_container_width=True)
-    st.dataframe(result_df[['Token', 'Live Price (USD)', 'Target Allocation (%)', 'Activated (%)']])
+    
 
-    if st.button("📄 Generate PDF Report"):
-        pdf_file = generate_pdf(result_df, active_alloc)
-        st.download_button(label="📥 Download Portfolio Report", data=pdf_file, file_name="portfolio_report.pdf", mime="application/pdf")
+st.subheader("📊 Portfolio Summary")
+
+st.plotly_chart(
+    px.pie(result_df, names='Token', values='Target Allocation (%)', title='Target Allocation'),
+    use_container_width=True
+)
+
+st.plotly_chart(
+    px.bar(result_df, x='Token', y=['Target Allocation (%)', 'Activated (%)'],
+           barmode='group', title='Target vs Activated Allocation'),
+    use_container_width=True
+)
+
+st.dataframe(result_df[['Token', 'Live Price (USD)', 'Target Allocation (%)', 'Activated (%)']])
+
+if st.button("📄 Generate PDF Report"):
+    pdf_file = generate_pdf(result_df, active_alloc)
+    st.download_button(
+        label="📥 Download Portfolio Report",
+        data=pdf_file,
+        file_name="portfolio_report.pdf",
+        mime="application/pdf"
+    )
