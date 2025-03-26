@@ -193,26 +193,72 @@ if uploaded_file:
 
     
 
-st.subheader("📊 Portfolio Summary")
 
-st.plotly_chart(
-    px.pie(result_df, names='Token', values='Target Allocation (%)', title='Target Allocation'),
-    use_container_width=True
-)
 
-st.plotly_chart(
-    px.bar(result_df, x='Token', y=['Target Allocation (%)', 'Activated (%)'],
-           barmode='group', title='Target vs Activated Allocation'),
-    use_container_width=True
-)
+    # بررسی پوزیشن‌های تازه فعال‌شده
+    state_file = "active_state.json"
+    previous_state = {}
+    newly_activated = []
 
-st.dataframe(result_df[['Token', 'Live Price (USD)', 'Target Allocation (%)', 'Activated (%)']])
+    if os.path.exists(state_file):
+        with open(state_file, "r") as f:
+            previous_state = json.load(f)
 
-if st.button("📄 Generate PDF Report"):
-    pdf_file = generate_pdf(result_df, active_alloc)
-    st.download_button(
-        label="📥 Download Portfolio Report",
-        data=pdf_file,
-        file_name="portfolio_report.pdf",
-        mime="application/pdf"
+    for token in tokens:
+        current = target_allocations[token] * entry_percent[token]
+        previous = previous_state.get(token, 0)
+        if current > 0 and previous == 0:
+            newly_activated.append(f"{token} – {current:.2f}% activated")
+
+    if st.button("✅ ثبت تغییرات دستی"):
+        if newly_activated:
+            with st.expander("🔔 پوزیشن‌های تازه فعال‌شده"):
+                for msg in newly_activated:
+                    st.write(f"- {msg}")
+
+            bot_token = os.environ.get("BOT_TOKEN")
+            chat_id = os.environ.get("CHAT_ID")
+            if bot_token and chat_id:
+                for msg in newly_activated:
+                    text = f"🚨 پوزیشن جدید فعال شد:\n{msg}"
+                    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                    payload = {"chat_id": chat_id, "text": text}
+                    try:
+                        requests.post(url, data=payload)
+                    except:
+                        st.error("❌ ارسال به تلگرام ناموفق بود")
+
+        with open(state_file, "w") as f:
+            json.dump({t: target_allocations[t] * entry_percent[t] for t in tokens}, f)
+
+    # ساخت جدول نهایی و نمودارها
+    result_df = pd.DataFrame({
+        "Token": tokens,
+        "CoinGecko ID": coingecko_ids,
+        "Target Allocation (%)": [target_allocations[t] for t in tokens],
+        "Live Price (USD)": live_prices,
+        "Activated (%)": [target_allocations[t] * entry_percent[t] for t in tokens]
+    })
+
+    st.subheader("📊 Portfolio Summary")
+    st.plotly_chart(
+        px.pie(result_df, names='Token', values='Target Allocation (%)', title='Target Allocation'),
+        use_container_width=True
     )
+
+    st.plotly_chart(
+        px.bar(result_df, x='Token', y=['Target Allocation (%)', 'Activated (%)'],
+               barmode='group', title='Target vs Activated Allocation'),
+        use_container_width=True
+    )
+
+    st.dataframe(result_df[['Token', 'Live Price (USD)', 'Target Allocation (%)', 'Activated (%)']])
+
+    if st.button("📄 Generate PDF Report"):
+        pdf_file = generate_pdf(result_df, active_alloc)
+        st.download_button(
+            label="📥 Download Portfolio Report",
+            data=pdf_file,
+            file_name="portfolio_report.pdf",
+            mime="application/pdf"
+        )
