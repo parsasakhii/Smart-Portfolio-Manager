@@ -61,6 +61,49 @@ def match_token_to_id(token, coins_df):
             return fuzzy.iloc[0]['id']
     return None
 
+
+def generate_pdf(df, active_alloc):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, "Crypto Portfolio Summary", ln=True, align='C')
+    pdf.set_font("Arial", '', 12)
+    pdf.cell(0, 10, f"Total Capital Deployed: {active_alloc:.2f}%", ln=True)
+    pdf.ln(5)
+
+    pdf.set_font("Arial", 'B', 10)
+    headers = ["Token", "Target Allocation (%)", "Live Price (USD)", "Activated (%)"]
+    col_widths = [40, 50, 40, 45]
+    for i, header in enumerate(headers):
+        pdf.cell(col_widths[i], 8, header, border=1, align='C')
+    pdf.ln()
+
+    pdf.set_font("Arial", '', 10)
+    for _, row in df.iterrows():
+        values = [str(row[h]) for h in headers]
+        for i, val in enumerate(values):
+            pdf.cell(col_widths[i], 8, val, border=1, align='C')
+        pdf.ln()
+
+    chart_path = "pie_chart_temp.png"
+    fig, ax = plt.subplots(figsize=(5.5, 5.5))
+    ax.pie(df['Target Allocation (%)'], labels=df['Token'], autopct='%1.1f%%', startangle=140)
+    plt.tight_layout()
+    plt.savefig(chart_path)
+    plt.close()
+
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 10, "Target Allocation Chart", ln=True, align='C')
+    pdf.image(chart_path, x=30, w=150)
+    os.remove(chart_path)
+
+    output = io.BytesIO()
+    pdf.output(output)
+    return output
+
+
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
     df.columns = df.columns.str.strip()
@@ -100,19 +143,16 @@ if uploaded_file:
         row = df[df["Token"] == token]
         entry1 = row["entry/%(50%)"].values[0] if "entry/%(50%)" in row.columns else None
         entry2 = row["entry2/%(50%)"].values[0] if "entry2/%(50%)" in row.columns else None
-
         try:
             entry1 = float(str(entry1).replace(",", "").replace("$", "").strip()) if entry1 else None
         except: entry1 = None
         try:
             entry2 = float(str(entry2).replace(",", "").replace("$", "").strip()) if entry2 else None
         except: entry2 = None
-
         coingecko_id = token_id_map.get(token, "N/A")
         price = prices.get(coingecko_id, {}).get("usd") if coingecko_id != "N/A" else None
         coingecko_ids.append(coingecko_id)
         live_prices.append(price if price else "-")
-
         default_percent = 0.0
         if token.upper() in STABLE_TOKENS:
             default_percent = 1.0
@@ -124,40 +164,23 @@ if uploaded_file:
                 default_percent += 0.5
             if price and price <= entry2:
                 default_percent += 0.5
-
         manual_value = st.slider(f"{token} – Activated (%)", 0, 100, int(default_percent * 100), step=5)
         entry_percent[token] = manual_value / 100
 
-    state_file = "active_state.json"
-    previous_state = {}
-    newly_activated = []
+    active_alloc = sum([target_allocations[t] * entry_percent[t] for t in tokens])
+    result_df = pd.DataFrame({
+        "Token": tokens,
+        "CoinGecko ID": coingecko_ids,
+        "Target Allocation (%)": [target_allocations[t] for t in tokens],
+        "Live Price (USD)": live_prices,
+        "Activated (%)": [target_allocations[t] * entry_percent[t] for t in tokens]
+    })
 
-    if os.path.exists(state_file):
-        with open(state_file, "r") as f:
-            previous_state = json.load(f)
+    st.subheader("📊 Portfolio Summary")
+    st.plotly_chart(px.pie(result_df, names='Token', values='Target Allocation (%)', title='Target Allocation'), use_container_width=True)
+    st.plotly_chart(px.bar(result_df, x='Token', y=['Target Allocation (%)', 'Activated (%)'], barmode='group', title='Target vs Activated Allocation'), use_container_width=True)
+    st.dataframe(result_df)
 
-    for token in tokens:
-        current = target_allocations[token] * entry_percent[token]
-        previous = previous_state.get(token, 0)
-        if current > 0 and previous == 0:
-            newly_activated.append(f"{token} – {current:.2f}% activated")
-
-    if newly_activated:
-        with st.expander("🔔 پوزیشن‌های تازه فعال‌شده"):
-            for msg in newly_activated:
-                st.write(f"- {msg}")
-
-        bot_token = os.environ.get("BOT_TOKEN")
-        chat_id = os.environ.get("CHAT_ID")
-        if bot_token and chat_id:
-            for msg in newly_activated:
-                text = f"🚨 پوزیشن جدید فعال شد:\n{msg}"
-                url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-                payload = {"chat_id": chat_id, "text": text}
-                try:
-                    requests.post(url, data=payload)
-                except:
-                    st.error("❌ ارسال به تلگرام ناموفق بود")
-
-    with open(state_file, "w") as f:
-        json.dump({t: target_allocations[t] * entry_percent[t] for t in tokens}, f)
+    if st.button("📄 Generate PDF Report"):
+        pdf_file = generate_pdf(result_df, active_alloc)
+        st.download_button(label="📥 Download Portfolio Report", data=pdf_file, file_name="portfolio_report.pdf", mime="application/pdf")
