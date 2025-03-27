@@ -114,9 +114,11 @@ def generate_pdf(df, active_alloc):
     pdf.image(chart_path, x=30, w=150)
     os.remove(chart_path)
 
-    output = io.BytesIO()
-    pdf.output(output)
-    return output
+    import tempfile
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+        pdf.output(tmp.name)
+        tmp.seek(0)
+        return tmp.read()
 
 
 if uploaded_file:
@@ -142,12 +144,15 @@ if uploaded_file:
 
     ids = "%2C".join(token_id_map.values())
     prices = {}
+
+    st.write("🧩 Matched IDs:", matched_ids)
+
     if ids:
         url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=usd"
         response = requests.get(url)
+        st.write("🔁 CoinGecko Response:", response.status_code, response.text)
         if response.status_code == 200:
             prices = response.json()
-
     entry_percent = {}
     live_prices = []
     coingecko_ids = []
