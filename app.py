@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import requests
@@ -9,6 +8,7 @@ import io
 import difflib
 import os
 import json
+import tempfile
 from datetime import datetime
 
 st.set_page_config(page_title="Smart Crypto Portfolio Tracker", layout="wide")
@@ -61,10 +61,6 @@ def match_token_to_id(token, coins_df):
             return fuzzy.iloc[0]['id']
     return None
 
-
-
-
-
 def generate_pdf(df, active_alloc):
     pdf = FPDF()
     pdf.add_page()
@@ -95,7 +91,7 @@ def generate_pdf(df, active_alloc):
 
     chart_path = "pie_chart_temp.png"
     fig, ax = plt.subplots(figsize=(6, 6))
-    wedges, texts = ax.pie(df['Target Allocation (%)'], startangle=140)
+    wedges, texts, autotexts = ax.pie(df['Target Allocation (%)'], autopct='%1.1f%%', startangle=140)
 
     legend_labels = [
         f"{token} ({percent:.1f}%)"
@@ -114,12 +110,10 @@ def generate_pdf(df, active_alloc):
     pdf.image(chart_path, x=30, w=150)
     os.remove(chart_path)
 
-    import tempfile
     with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
         pdf.output(tmp.name)
         tmp.seek(0)
         return tmp.read()
-
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
@@ -142,22 +136,17 @@ if uploaded_file:
         if matched_id:
             token_id_map[token] = matched_id
 
-    matched_ids = list(token_id_map.values())
     ids = "%2C".join(token_id_map.values())
     prices = {}
-
-    st.write("🧩 Matched IDs:", matched_ids)
-
     if ids:
         url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=usd"
         response = requests.get(url)
         if response.status_code == 200:
             prices = response.json()
+
     entry_percent = {}
     live_prices = []
     coingecko_ids = []
-
-    st.subheader("✏️ Adjust Activation Manually (Optional)")
 
     for token in tokens:
         row = df[df["Token"] == token]
@@ -184,64 +173,16 @@ if uploaded_file:
                 default_percent += 0.5
             if price and price <= entry2:
                 default_percent += 0.5
-        manual_value = st.slider(f"{token} – Activated (%)", 0, 100, int(default_percent * 100), step=5)
-        entry_percent[token] = manual_value / 100
+        entry_percent[token] = default_percent
 
-    active_alloc = sum([target_allocations[t] * entry_percent[t] for t in tokens])
     result_df = pd.DataFrame({
         "Token": tokens,
-        "CoinGecko ID": coingecko_ids,
-        "Target Allocation (%)": [target_allocations[t] for t in tokens],
         "Live Price (USD)": live_prices,
+        "Target Allocation (%)": [target_allocations[t] for t in tokens],
         "Activated (%)": [target_allocations[t] * entry_percent[t] for t in tokens]
     })
 
-    # بررسی وضعیت قبلی و ذخیره‌سازی برای فعال‌سازی جدید
-    state_file = "active_state.json"
-    previous_state = {}
-    if os.path.exists(state_file):
-        with open(state_file, "r") as f:
-            previous_state = json.load(f)
-
-    newly_activated = []
-
-    for token in tokens:
-        current = target_allocations[token] * entry_percent[token]
-        previous = previous_state.get(token, 0)
-
-        # فقط ارزهایی که از قبل صفر بودن و الان تغییر کردن، دکمه نمایش داده میشه
-        if previous == 0 and current > 0:
-            manual_button_key = f"{token}_save_button"
-            if st.button(f"Save {token} activation", key=manual_button_key):
-                msg = f"{token} – {current:.2f}% activated"
-                newly_activated.append(msg)
-                st.success(f"✅ {msg}")
-
-                bot_token = os.environ.get("BOT_TOKEN")
-                chat_id = os.environ.get("CHAT_ID")
-                if bot_token and chat_id:
-                    text = f"🚨 New position activated:\n{msg}"
-                    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-                    payload = {"chat_id": chat_id, "text": text}
-                    try:
-                        requests.post(url, data=payload)
-                    except:
-                        st.error("❌ Telegram notification failed")
-
-                previous_state[token] = current
-                with open(state_file, "w") as f:
-                    json.dump(previous_state, f)
-
-
-
-    # ساخت جدول نهایی و نمودارها
-    result_df = pd.DataFrame({
-        "Token": tokens,
-        "CoinGecko ID": coingecko_ids,
-        "Target Allocation (%)": [target_allocations[t] for t in tokens],
-        "Live Price (USD)": live_prices,
-        "Activated (%)": [target_allocations[t] * entry_percent[t] for t in tokens]
-    })
+    active_alloc = sum(result_df["Activated (%)"])
 
     st.subheader("📊 Portfolio Summary")
     st.plotly_chart(
@@ -255,7 +196,7 @@ if uploaded_file:
         use_container_width=True
     )
 
-    st.dataframe(result_df[['Token', 'Live Price (USD)', 'Target Allocation (%)', 'Activated (%)']])
+    st.dataframe(result_df)
 
     if st.button("📄 Generate PDF Report"):
         pdf_file = generate_pdf(result_df, active_alloc)
