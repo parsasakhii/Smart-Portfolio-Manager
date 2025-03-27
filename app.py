@@ -142,6 +142,7 @@ if uploaded_file:
         if matched_id:
             token_id_map[token] = matched_id
 
+    matched_ids = list(token_id_map.values())
     ids = "%2C".join(token_id_map.values())
     prices = {}
 
