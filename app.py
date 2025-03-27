@@ -151,7 +151,6 @@ if uploaded_file:
     if ids:
         url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=usd"
         response = requests.get(url)
-        st.write("🔁 CoinGecko Response:", response.status_code, response.text)
         if response.status_code == 200:
             prices = response.json()
     entry_percent = {}
@@ -196,16 +195,6 @@ if uploaded_file:
         "Live Price (USD)": live_prices,
         "Activated (%)": [target_allocations[t] * entry_percent[t] for t in tokens]
     })
-
-    
-
-
-
-    
-
-    
-
-    
 
     # بررسی وضعیت قبلی و ذخیره‌سازی برای فعال‌سازی جدید
     state_file = "active_state.json"
