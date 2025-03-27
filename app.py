@@ -197,7 +197,9 @@ if uploaded_file:
 
     
 
-    # بررسی وضعیت قبلی
+    
+
+    # بررسی وضعیت قبلی برای هر ارز
     state_file = "active_state.json"
     previous_state = {}
     if os.path.exists(state_file):
@@ -211,26 +213,28 @@ if uploaded_file:
         previous = previous_state.get(token, 0)
 
         st.markdown(f"---\n**{token}**")
-        if st.button(f"Save changes for {token}"):
-            if current > 0 and previous == 0:
-                msg = f"{token} – {current:.2f}% activated"
-                newly_activated.append(msg)
-                st.success(f"✅ {msg}")
 
-                bot_token = os.environ.get("BOT_TOKEN")
-                chat_id = os.environ.get("CHAT_ID")
-                if bot_token and chat_id:
-                    text = f"🚨 New position activated:\n{msg}"
-                    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-                    payload = {"chat_id": chat_id, "text": text}
-                    try:
-                        requests.post(url, data=payload)
-                    except:
-                        st.error("❌ Telegram notification failed")
+        if abs(current - previous) > 0.001:
+            if st.button(f"Save changes for {token}"):
+                if current > 0 and previous == 0:
+                    msg = f"{token} – {current:.2f}% activated"
+                    newly_activated.append(msg)
+                    st.success(f"✅ {msg}")
 
-            previous_state[token] = current
-            with open(state_file, "w") as f:
-                json.dump(previous_state, f)
+                    bot_token = os.environ.get("BOT_TOKEN")
+                    chat_id = os.environ.get("CHAT_ID")
+                    if bot_token and chat_id:
+                        text = f"🚨 New position activated:\n{msg}"
+                        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                        payload = {"chat_id": chat_id, "text": text}
+                        try:
+                            requests.post(url, data=payload)
+                        except:
+                            st.error("❌ Telegram notification failed")
+
+                previous_state[token] = current
+                with open(state_file, "w") as f:
+                    json.dump(previous_state, f)
 
 
 
